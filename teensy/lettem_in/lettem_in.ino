@@ -12,12 +12,16 @@
 // Serial protocol (115200 8N1). Multi-byte fields are little-endian.
 //   'P'                                              ping. Reply: 'p'.
 //   'S'                                              stop playback. Reply: none.
-//   'G'                                              play active file then DTMF 9.
+//   'G'                                              play active file then DTMF (active digit).
 //   'A'                                              play active file only.
-//   'M'                                              DTMF 9 only.
+//   'M'                                              DTMF only (active digit).
 //   'F' <u16 nameLen> <nameLen bytes>                set active filename. Reply: 'f' OK / 'e' error.
+//   'D' <byte digit>                                 set active DTMF digit ('0'-'9','*','#').
+//                                                    Reply: 'd' OK / 'e' error.
 //   'W' <u16 nameLen> <nameLen bytes>
 //       <u32 size> <size bytes>                      write file to SD. Reply: 'D' OK / 'E' error.
+//   NOTE: 'D'-as-command and 'D'-as-write-ack share a byte but only the host
+//   knows which it is by which command it just sent; no protocol ambiguity.
 
 #include <Audio.h>
 #include <Wire.h>
@@ -56,8 +60,36 @@ const uint8_t  DTMF_BURSTS    = 3;
 const float    DTMF_AMP       = 0.50f;
 const float    GREET_GAIN     = 0.60f;
 
-// ---- Active file ----
+// ---- Active file + active DTMF digit ----
 char activeFile[64] = "greeting.wav";
+char activeDigit = '9';
+
+struct DtmfFreq { uint16_t row; uint16_t col; };
+
+static DtmfFreq freqsFor(char digit) {
+  // Standard DTMF row/col pairs.
+  switch (digit) {
+    case '1': return { 697, 1209 };
+    case '2': return { 697, 1336 };
+    case '3': return { 697, 1477 };
+    case '4': return { 770, 1209 };
+    case '5': return { 770, 1336 };
+    case '6': return { 770, 1477 };
+    case '7': return { 852, 1209 };
+    case '8': return { 852, 1336 };
+    case '9': return { 852, 1477 };
+    case '0': return { 941, 1336 };
+    case '*': return { 941, 1209 };
+    case '#': return { 941, 1477 };
+    default:  return { 852, 1477 };  // default to '9'
+  }
+}
+
+static void applyActiveDigit() {
+  DtmfFreq f = freqsFor(activeDigit);
+  dtmfRow.frequency(f.row);
+  dtmfCol.frequency(f.col);
+}
 
 // ---- Serial read helpers ----
 static bool readExact(uint8_t* buf, size_t n, uint32_t timeoutMs = 8000) {
@@ -91,6 +123,7 @@ static uint32_t readU32LE() {
 
 // ---- Audio control ----
 void dtmfOn() {
+  applyActiveDigit();
   mixL.gain(1, 1.0f); mixL.gain(2, 1.0f);
   mixR.gain(1, 1.0f); mixR.gain(2, 1.0f);
   dtmfRow.amplitude(DTMF_AMP);
@@ -143,6 +176,17 @@ void cmdSetActive() {
   Serial.write('f');
 }
 
+void cmdSetDigit() {
+  uint8_t b[1];
+  if (!readExact(b, 1, 1000)) { Serial.write('e'); return; }
+  char d = (char)b[0];
+  bool ok = (d >= '0' && d <= '9') || d == '*' || d == '#';
+  if (!ok) { Serial.write('e'); return; }
+  activeDigit = d;
+  applyActiveDigit();
+  Serial.write('d');
+}
+
 void cmdWriteFile() {
   uint16_t n = readU16LE();
   if (n == 0 || n >= 64) { Serial.write('E'); return; }
@@ -185,6 +229,7 @@ void handleSerial() {
       case 'S': stopAll();            return;
       case 'P': Serial.write('p');    break;
       case 'F': cmdSetActive();       return;
+      case 'D': cmdSetDigit();        return;
       case 'W': cmdWriteFile();       return;
       default: break;
     }
@@ -196,8 +241,9 @@ void setup() {
   AudioMemory(24);
   mixL.gain(0, GREET_GAIN); mixL.gain(1, 0); mixL.gain(2, 0); mixL.gain(3, 0);
   mixR.gain(0, GREET_GAIN); mixR.gain(1, 0); mixR.gain(2, 0); mixR.gain(3, 0);
-  dtmfRow.frequency(852);  dtmfRow.amplitude(0);
-  dtmfCol.frequency(1477); dtmfCol.amplitude(0);
+  dtmfRow.amplitude(0);
+  dtmfCol.amplitude(0);
+  applyActiveDigit();
   Serial.begin(115200);
   SD.begin(BUILTIN_SDCARD);
 }

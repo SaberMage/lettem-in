@@ -31,6 +31,17 @@
             android:layout_height="wrap_content" />
 
         <TextView
+            android:id="@+id/dtmfLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="16dp"
+            android:text="@string/dtmf_digit" />
+        <Spinner
+            android:id="@+id/dtmfSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView
             android:id="@+id/audioLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

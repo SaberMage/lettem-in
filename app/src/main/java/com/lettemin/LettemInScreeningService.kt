@@ -21,7 +21,6 @@ class LettemInScreeningService : CallScreeningService() {
         val handle: Uri? = callDetails.handle
         val number = handle?.schemeSpecificPart
 
-        // Buckets the caller may match. Try most specific first.
         val keys = resolveKeys(number, callDetails)
         val profile = keys.firstNotNullOfOrNull { k -> ProfileRepo.findByContactKey(this, k) }
 
@@ -29,8 +28,7 @@ class LettemInScreeningService : CallScreeningService() {
             applyProfile(callDetails, number, profile)
             return
         }
-        // No profile matched any of {SPAM, contactKey, NOT_IN_CONTACTS, ANONYMOUS}.
-        // Just let the call ring through normally.
+        // No profile matched. Let the call ring through normally.
         respondToCall(callDetails, allowResponse())
     }
 
@@ -43,20 +41,18 @@ class LettemInScreeningService : CallScreeningService() {
             else -> {
                 respondToCall(callDetails, allowResponse())
                 if (AppState.teensyAttached) {
-                    armForCall(number, profile.behavior, profile.audioFile)
+                    val intent = Intent(this, LettemInService::class.java).apply {
+                        action = LettemInService.ACTION_ARM_ANSWER
+                        putExtra(LettemInService.EXTRA_NUMBER, number ?: "")
+                        putExtra(LettemInService.EXTRA_BEHAVIOR, profile.behavior.key)
+                        putExtra(LettemInService.EXTRA_AUDIO_FILE, profile.audioFile)
+                        putExtra(LettemInService.EXTRA_AUDIO_DURATION, profile.audioDurationMs ?: 0L)
+                        putExtra(LettemInService.EXTRA_DTMF, profile.dtmf)
+                    }
+                    ContextCompat.startForegroundService(this, intent)
                 }
             }
         }
-    }
-
-    private fun armForCall(number: String?, behavior: Behavior, audioFile: String?) {
-        val intent = Intent(this, LettemInService::class.java).apply {
-            action = LettemInService.ACTION_ARM_ANSWER
-            putExtra(LettemInService.EXTRA_NUMBER, number ?: "")
-            putExtra(LettemInService.EXTRA_BEHAVIOR, behavior.key)
-            putExtra(LettemInService.EXTRA_AUDIO_FILE, audioFile)
-        }
-        ContextCompat.startForegroundService(this, intent)
     }
 
     private fun allowResponse(): CallResponse = CallResponse.Builder()
@@ -76,7 +72,7 @@ class LettemInScreeningService : CallScreeningService() {
     /**
      * Buckets the caller falls into. Order matters — first match wins.
      * Priority:
-     *   SPAM  (STIR/SHAKEN failed)  →  real contact key  →  NOT_IN_CONTACTS  →  ANONYMOUS
+     *   SPAM (STIR/SHAKEN failed)  →  real contact key  →  NOT_IN_CONTACTS  →  ANONYMOUS
      * Anonymous callers (no number) intentionally skip NOT_IN_CONTACTS.
      */
     private fun resolveKeys(number: String?, details: Call.Details): List<String> {
@@ -110,5 +106,4 @@ class LettemInScreeningService : CallScreeningService() {
         )?.use { c -> if (c.moveToFirst()) return c.getString(0) }
         return null
     }
-
 }

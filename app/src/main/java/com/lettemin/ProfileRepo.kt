@@ -58,6 +58,8 @@ object ProfileRepo {
         put("name", p.name)
         put("behavior", p.behavior.key)
         put("audioFile", p.audioFile ?: JSONObject.NULL)
+        put("audioDurationMs", p.audioDurationMs ?: JSONObject.NULL)
+        put("dtmf", p.dtmf)
         put("contactKeys", JSONArray(p.contactKeys.toList()))
     }
 
@@ -70,6 +72,8 @@ object ProfileRepo {
             name = j.getString("name"),
             behavior = Behavior.fromKey(if (j.has("behavior")) j.getString("behavior") else null),
             audioFile = if (!j.has("audioFile") || j.isNull("audioFile")) null else j.getString("audioFile"),
+            audioDurationMs = if (!j.has("audioDurationMs") || j.isNull("audioDurationMs")) null else j.getLong("audioDurationMs"),
+            dtmf = if (j.has("dtmf")) j.getString("dtmf") else "9",
             contactKeys = keys
         )
     }

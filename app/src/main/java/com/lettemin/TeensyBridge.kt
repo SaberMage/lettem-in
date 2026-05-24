@@ -93,6 +93,18 @@ class TeensyBridge(private val ctx: Context) {
         }
     }
 
+    /** Tell Teensy which DTMF digit to play. One of 0-9, *, #. Reply 'd' OK. */
+    @Synchronized
+    fun setDtmfDigit(digit: Char, timeoutMs: Int = 1000): Boolean {
+        val p = port ?: return false
+        val valid = digit in '0'..'9' || digit == '*' || digit == '#'
+        require(valid) { "invalid DTMF digit: $digit" }
+        return try {
+            p.write(byteArrayOf('D'.code.toByte(), digit.code.toByte()), 500)
+            waitForByte(p, 'd'.code.toByte(), timeoutMs)
+        } catch (e: IOException) { close(); false }
+    }
+
     /** Tell Teensy which file on its SD to play on next 'G'/'A'. Returns true on 'f' ack. */
     @Synchronized
     fun setActiveFile(name: String, timeoutMs: Int = 1500): Boolean {

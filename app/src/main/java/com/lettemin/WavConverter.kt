@@ -19,7 +19,9 @@ object WavConverter {
     private const val TARGET_RATE = 44100
     private const val DECODE_TIMEOUT_US = 10_000L
 
-    fun convert(ctx: Context, input: Uri): ByteArray {
+    data class Result(val wavBytes: ByteArray, val durationMs: Long)
+
+    fun convert(ctx: Context, input: Uri): Result {
         val extractor = MediaExtractor()
         ctx.contentResolver.openFileDescriptor(input, "r").use { pfd ->
             requireNotNull(pfd) { "cannot open audio uri" }
@@ -44,7 +46,8 @@ object WavConverter {
         val mono = if (srcChannels == 1) samples else downmixToMono(samples, srcChannels)
         val resampled = if (srcRate == TARGET_RATE) mono else linearResample(mono, srcRate, TARGET_RATE)
 
-        return encodeWav(resampled, TARGET_RATE)
+        val durationMs = resampled.size.toLong() * 1000L / TARGET_RATE
+        return Result(encodeWav(resampled, TARGET_RATE), durationMs)
     }
 
     private fun findAudioTrack(extractor: MediaExtractor): Pair<Int, MediaFormat>? {

@@ -37,6 +37,8 @@ class LettemInService : Service() {
         const val EXTRA_NUMBER = "number"
         const val EXTRA_BEHAVIOR = "behavior"      // Behavior.key (string)
         const val EXTRA_AUDIO_FILE = "audio_file"  // String?, filename on Teensy SD
+        const val EXTRA_AUDIO_DURATION = "audio_duration_ms"  // Long, 0 if unknown
+        const val EXTRA_DTMF = "dtmf"              // String, e.g. "9" or "*"
         private const val CHANNEL_ID = "lettemin.svc"
         private const val NOTIF_ID = 1
         private const val TEENSY_VID = 0x16C0  // PJRC
@@ -65,10 +67,17 @@ class LettemInService : Service() {
     // What to do once we answer. Captured from ARM intent.
     @Volatile private var pendingBehavior: Behavior = Behavior.AUDIO_AND_DTMF
     @Volatile private var pendingAudioFile: String? = null
+    @Volatile private var pendingAudioDurationMs: Long = 0L
+    @Volatile private var pendingDtmf: String = "9"
 
-    // Auto hang-up window. Counted from the moment we accept the call.
-    private val MAX_CALL_DURATION_MS = 15_000L
     private val hangupRunnable = Runnable { hangUp() }
+
+    /** Approx total wall-clock time the Teensy needs to finish the play sequence.
+     *  Keep in sync with constants in teensy/lettem_in/lettem_in.ino. */
+    private val DTMF_TOTAL_MS = 3L * 600L + 2L * 120L     // 3 bursts × 600ms + 2 gaps × 120ms
+    private val GAP_AFTER_AUDIO_MS = 1000L                 // GAP_MS in firmware
+    private val POST_BUFFER_MS = 2000L                     // safety pad before hangup
+    private val FLOOR_MS = 5000L                           // minimum hold-time, even for DTMF-only
 
     private var legacyListener: PhoneStateListener? = null
     private var modernCallback: Any? = null
@@ -109,7 +118,10 @@ class LettemInService : Service() {
             armed = AppState.teensyAttached
             pendingBehavior = Behavior.fromKey(intent.getStringExtra(EXTRA_BEHAVIOR))
             pendingAudioFile = intent.getStringExtra(EXTRA_AUDIO_FILE)
-            Log.d("LettemIn", "ARMED behavior=$pendingBehavior audio=$pendingAudioFile armed=$armed")
+            pendingAudioDurationMs = intent.getLongExtra(EXTRA_AUDIO_DURATION, 0L)
+            pendingDtmf = intent.getStringExtra(EXTRA_DTMF) ?: "9"
+            Log.d("LettemIn", "ARMED behavior=$pendingBehavior audio=$pendingAudioFile " +
+                "dur=$pendingAudioDurationMs dtmf=$pendingDtmf armed=$armed")
         }
         try {
             startForegroundWithNotif()
@@ -270,9 +282,9 @@ class LettemInService : Service() {
             TelephonyManager.CALL_STATE_OFFHOOK -> {
                 if (inProgress) {
                     main.postDelayed({ runGreetingSequence() }, 400)
-                    // Safety net: end the call no matter what, after the cap.
+                    // Auto hang-up after the play sequence finishes (dynamic).
                     main.removeCallbacks(hangupRunnable)
-                    main.postDelayed(hangupRunnable, MAX_CALL_DURATION_MS)
+                    main.postDelayed(hangupRunnable, computeHangupDelayMs())
                 }
             }
             TelephonyManager.CALL_STATE_IDLE -> {
@@ -313,24 +325,31 @@ class LettemInService : Service() {
 
         val behavior = pendingBehavior
         val file = pendingAudioFile
+        val digit = pendingDtmf.firstOrNull() ?: '9'
 
-        // Audio file selection happens before the play command. Off-load to a worker
-        // thread because setActiveFile is a blocking serial round-trip.
+        // Blocking CDC round-trips — off-load to a worker thread.
         Thread {
-            if (behavior == Behavior.AUDIO || behavior == Behavior.AUDIO_AND_DTMF) {
-                if (!file.isNullOrBlank()) {
-                    val ok = teensy.setActiveFile(file)
-                    if (!ok) Log.w("LettemIn", "setActiveFile failed for $file")
-                }
+            if (behavior.involvesAudio() && !file.isNullOrBlank()) {
+                if (!teensy.setActiveFile(file)) Log.w("LettemIn", "setActiveFile failed for $file")
+            }
+            if (behavior.involvesDtmf()) {
+                if (!teensy.setDtmfDigit(digit)) Log.w("LettemIn", "setDtmfDigit failed for $digit")
             }
             val cmd = when (behavior) {
                 Behavior.DTMF -> 'M'
                 Behavior.AUDIO -> 'A'
                 Behavior.AUDIO_AND_DTMF -> 'G'
-                Behavior.REJECT -> return@Thread  // shouldn't reach here; ScreeningService rejects upstream
+                Behavior.REJECT -> return@Thread
             }
             main.postDelayed({ teensy.send(cmd) }, 250)
         }.start()
+    }
+
+    private fun computeHangupDelayMs(): Long {
+        val audio = if (pendingBehavior.involvesAudio()) pendingAudioDurationMs else 0L
+        val gap = if (pendingBehavior == Behavior.AUDIO_AND_DTMF) GAP_AFTER_AUDIO_MS else 0L
+        val dtmf = if (pendingBehavior.involvesDtmf()) DTMF_TOTAL_MS else 0L
+        return maxOf(FLOOR_MS, audio + gap + dtmf + POST_BUFFER_MS)
     }
 
     private fun routeToUsbHeadset(): Boolean {
