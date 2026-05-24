@@ -15,9 +15,18 @@ android {
         versionName = "0.1"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("${rootDir}/keystore/lettemin-release.jks")
+            storePassword = "lettemin"
+            keyAlias = "lettemin"
+            keyPassword = "lettemin"
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

@@ -10,6 +10,7 @@ local.properties
 *.aab
 *.keystore
 *.jks
+keystore/
 *.log
 
 # Teensy build artifacts
