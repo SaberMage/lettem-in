@@ -23,6 +23,8 @@ import android.telecom.TelecomManager
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
+import android.util.Log
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 
@@ -80,9 +82,8 @@ class LettemInService : Service() {
         teensy = TeensyBridge(this)
         createChannel()
         registerUsbReceiver()
-        registerPhoneListener()
+        registerPhoneListener()  // now guarded internally
         AppState.serviceRunning = true
-        // Scan for already-attached Teensy
         scanForTeensy()
     }
 
@@ -91,8 +92,20 @@ class LettemInService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        // ACTION_START or ACTION_ARM_ANSWER both fall through to (re)foreground.
-        startForegroundWithNotif()
+        try {
+            // ARM_ANSWER means a real call is incoming → may legitimately use phoneCall type.
+            val asCall = intent?.action == ACTION_ARM_ANSWER
+            startForegroundWithNotif(asCall)
+        } catch (e: Throwable) {
+            Log.e("LettemIn", "startForeground failed", e)
+            Toast.makeText(
+                this,
+                "Service failed: ${e.javaClass.simpleName}: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
+            stopSelf()
+            return START_NOT_STICKY
+        }
         return START_STICKY
     }
 
@@ -147,10 +160,17 @@ class LettemInService : Service() {
         nm.createNotificationChannel(ch)
     }
 
-    private fun startForegroundWithNotif() {
+    private fun startForegroundWithNotif(asCall: Boolean = false) {
         val n = buildNotif()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
+            // Android 14+: phoneCall FGS type is only allowed when actually screening/handling
+            // a call. Use specialUse for the always-on idle listener; promote to phoneCall
+            // only when ARM_ANSWER fires for a real incoming call.
+            val type = if (asCall)
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+            else
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            startForeground(NOTIF_ID, n, type)
         } else {
             startForeground(NOTIF_ID, n)
         }
@@ -187,22 +207,31 @@ class LettemInService : Service() {
     // ---------------- Phone state ----------------
 
     private fun registerPhoneListener() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val cb = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
-                override fun onCallStateChanged(state: Int) { handleState(state) }
-            }
-            modernCallback = cb
-            telephony.registerTelephonyCallback(mainExecutor, cb)
-        } else {
-            val l = object : PhoneStateListener() {
-                @Deprecated("legacy")
-                override fun onCallStateChanged(state: Int, phoneNumber: String?) {
-                    handleState(state)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
+            != PackageManager.PERMISSION_GRANTED) {
+            // No permission → skip. Service can still hold the notif; will subscribe later.
+            return
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val cb = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
+                    override fun onCallStateChanged(state: Int) { handleState(state) }
                 }
+                modernCallback = cb
+                telephony.registerTelephonyCallback(mainExecutor, cb)
+            } else {
+                val l = object : PhoneStateListener() {
+                    @Deprecated("legacy")
+                    override fun onCallStateChanged(state: Int, phoneNumber: String?) {
+                        handleState(state)
+                    }
+                }
+                legacyListener = l
+                @Suppress("DEPRECATION")
+                telephony.listen(l, PhoneStateListener.LISTEN_CALL_STATE)
             }
-            legacyListener = l
-            @Suppress("DEPRECATION")
-            telephony.listen(l, PhoneStateListener.LISTEN_CALL_STATE)
+        } catch (e: SecurityException) {
+            Log.w("LettemIn", "telephony listen denied", e)
         }
     }
 
