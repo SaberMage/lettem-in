@@ -31,16 +31,16 @@ object ProfileRepo {
             .edit().putString(KEY_JSON, arr.toString()).apply()
     }
 
-    /** Insert or update by id. Any contactKeys in this profile are removed from others. */
+    /**
+     * Insert or update by id. Contacts may belong to multiple profiles simultaneously
+     * (many-to-many). When more than one profile matches a call, the profile list
+     * order decides which one fires — first match wins.
+     */
     fun upsert(ctx: Context, profile: Profile) {
         val list = load(ctx).toMutableList()
-        val cleaned = list.map { other ->
-            if (other.id == profile.id) other
-            else other.copy(contactKeys = other.contactKeys - profile.contactKeys)
-        }.toMutableList()
-        val idx = cleaned.indexOfFirst { it.id == profile.id }
-        if (idx >= 0) cleaned[idx] = profile else cleaned.add(profile)
-        save(ctx, cleaned)
+        val idx = list.indexOfFirst { it.id == profile.id }
+        if (idx >= 0) list[idx] = profile else list.add(profile)
+        save(ctx, list)
     }
 
     fun delete(ctx: Context, id: String) {

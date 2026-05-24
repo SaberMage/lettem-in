@@ -53,7 +53,7 @@
 
     <!-- Contact picker -->
     <string name="pick_contacts_title">Pick contacts</string>
-    <string name="pick_contacts_note">A contact can belong to only one profile. Adding it here removes it from any other profile.</string>
+    <string name="pick_contacts_note">Contacts may belong to multiple profiles. When more than one matches a call, the topmost profile in the list wins.</string>
     <string name="search_contacts">Search</string>
     <string name="anonymous_caller">(Anonymous / withheld number)</string>
     <string name="likely_spam">(Likely spam — STIR/SHAKEN failed)</string>
