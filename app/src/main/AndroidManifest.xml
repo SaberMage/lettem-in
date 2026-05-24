@@ -38,6 +38,23 @@
                 android:resource="@xml/device_filter" />
         </activity>
 
+        <activity
+            android:name=".ProfilesActivity"
+            android:exported="false"
+            android:label="@string/profiles" />
+
+        <activity
+            android:name=".ProfileEditActivity"
+            android:exported="false"
+            android:label="@string/profiles"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ContactPickerActivity"
+            android:exported="false"
+            android:label="@string/pick_contacts_title"
+            android:windowSoftInputMode="adjustResize" />
+
         <service
             android:name=".LettemInService"
             android:exported="false"

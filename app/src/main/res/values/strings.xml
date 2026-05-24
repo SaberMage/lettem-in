@@ -10,4 +10,36 @@
     <string name="set_default_screening">Set as call screening app</string>
     <string name="start_service">Start service</string>
     <string name="stop_service">Stop service</string>
+    <string name="manage_profiles">Manage profiles</string>
+
+    <!-- Profiles list -->
+    <string name="profiles">Profiles</string>
+    <string name="new_profile">New profile</string>
+    <string name="no_profiles">No profiles yet. Tap New profile to create one.</string>
+
+    <!-- Profile edit -->
+    <string name="profile_name">Profile name</string>
+    <string name="profile_name_hint">e.g. Coworkers</string>
+    <string name="behavior">Behavior</string>
+    <string name="pick_audio">Pick audio file</string>
+    <string name="audio_file_none">Audio: none</string>
+    <string name="audio_file_label">Audio: %1$s</string>
+    <string name="pick_contacts">Pick contacts</string>
+    <string name="contacts_count_zero">Contacts: 0</string>
+    <string name="contacts_count">Contacts: %1$d</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="uploading_audio">Uploading audio…</string>
+    <string name="upload_ok">Audio uploaded</string>
+    <string name="upload_fail">Audio upload failed</string>
+    <string name="need_teensy_to_upload">Plug in Teensy to upload audio</string>
+    <string name="need_audio_file">Pick an audio file for audio behaviors</string>
+    <string name="need_name">Enter a profile name</string>
+
+    <!-- Contact picker -->
+    <string name="pick_contacts_title">Pick contacts</string>
+    <string name="pick_contacts_note">A contact can belong to only one profile. Adding it here removes it from any other profile.</string>
+    <string name="search_contacts">Search</string>
+    <string name="anonymous_caller">(Anonymous / withheld number)</string>
+    <string name="likely_spam">(Likely spam — STIR/SHAKEN failed)</string>
 </resources>

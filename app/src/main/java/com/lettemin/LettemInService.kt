@@ -35,6 +35,8 @@ class LettemInService : Service() {
         const val ACTION_STOP = "stop"
         const val ACTION_ARM_ANSWER = "arm"
         const val EXTRA_NUMBER = "number"
+        const val EXTRA_BEHAVIOR = "behavior"      // Behavior.key (string)
+        const val EXTRA_AUDIO_FILE = "audio_file"  // String?, filename on Teensy SD
         private const val CHANNEL_ID = "lettemin.svc"
         private const val NOTIF_ID = 1
         private const val TEENSY_VID = 0x16C0  // PJRC
@@ -58,10 +60,11 @@ class LettemInService : Service() {
     private val main = Handler(Looper.getMainLooper())
 
     @Volatile private var inProgress: Boolean = false
-    // Set by ScreeningService via ACTION_ARM_ANSWER for non-contact calls only.
-    // Cleared on IDLE. Without this, we'd answer every ringing call once Teensy is attached,
-    // including known contacts.
+    // Set by ScreeningService via ACTION_ARM_ANSWER. Cleared on IDLE.
     @Volatile private var armed: Boolean = false
+    // What to do once we answer. Captured from ARM intent.
+    @Volatile private var pendingBehavior: Behavior = Behavior.AUDIO_AND_DTMF
+    @Volatile private var pendingAudioFile: String? = null
 
     // Auto hang-up window. Counted from the moment we accept the call.
     private val MAX_CALL_DURATION_MS = 15_000L
@@ -104,7 +107,9 @@ class LettemInService : Service() {
         }
         if (intent?.action == ACTION_ARM_ANSWER) {
             armed = AppState.teensyAttached
-            Log.d("LettemIn", "ARMED for non-contact incoming call (armed=$armed)")
+            pendingBehavior = Behavior.fromKey(intent.getStringExtra(EXTRA_BEHAVIOR))
+            pendingAudioFile = intent.getStringExtra(EXTRA_AUDIO_FILE)
+            Log.d("LettemIn", "ARMED behavior=$pendingBehavior audio=$pendingAudioFile armed=$armed")
         }
         try {
             startForegroundWithNotif()
@@ -305,7 +310,27 @@ class LettemInService : Service() {
         audio.mode = AudioManager.MODE_IN_COMMUNICATION
         if (!routeToUsbHeadset()) return
         if (!teensy.isReady) teensy.open()
-        main.postDelayed({ teensy.send('G') }, 250)
+
+        val behavior = pendingBehavior
+        val file = pendingAudioFile
+
+        // Audio file selection happens before the play command. Off-load to a worker
+        // thread because setActiveFile is a blocking serial round-trip.
+        Thread {
+            if (behavior == Behavior.AUDIO || behavior == Behavior.AUDIO_AND_DTMF) {
+                if (!file.isNullOrBlank()) {
+                    val ok = teensy.setActiveFile(file)
+                    if (!ok) Log.w("LettemIn", "setActiveFile failed for $file")
+                }
+            }
+            val cmd = when (behavior) {
+                Behavior.DTMF -> 'M'
+                Behavior.AUDIO -> 'A'
+                Behavior.AUDIO_AND_DTMF -> 'G'
+                Behavior.REJECT -> return@Thread  // shouldn't reach here; ScreeningService rejects upstream
+            }
+            main.postDelayed({ teensy.send(cmd) }, 250)
+        }.start()
     }
 
     private fun routeToUsbHeadset(): Boolean {

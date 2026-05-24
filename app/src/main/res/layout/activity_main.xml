@@ -36,4 +36,11 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/stop_service" />
+
+    <Button
+        android:id="@+id/btnProfiles"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/manage_profiles" />
 </LinearLayout>

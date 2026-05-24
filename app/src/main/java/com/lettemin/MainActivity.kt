@@ -64,6 +64,9 @@ class MainActivity : AppCompatActivity() {
             LettemInService.stop(this)
             refresh()
         }
+        findViewById<Button>(R.id.btnProfiles).setOnClickListener {
+            startActivity(Intent(this, ProfilesActivity::class.java))
+        }
         refresh()
     }
 
