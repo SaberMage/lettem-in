@@ -39,6 +39,7 @@ class LettemInService : Service() {
         const val EXTRA_AUDIO_FILE = "audio_file"  // String?, filename on Teensy SD
         const val EXTRA_AUDIO_DURATION = "audio_duration_ms"  // Long, 0 if unknown
         const val EXTRA_DTMF = "dtmf"              // String, e.g. "9" or "*"
+        const val EXTRA_VOLUME = "volume"          // Float 0..1
         private const val CHANNEL_ID = "lettemin.svc"
         private const val NOTIF_ID = 1
         private const val TEENSY_VID = 0x16C0  // PJRC
@@ -69,6 +70,7 @@ class LettemInService : Service() {
     @Volatile private var pendingAudioFile: String? = null
     @Volatile private var pendingAudioDurationMs: Long = 0L
     @Volatile private var pendingDtmf: String = "9"
+    @Volatile private var pendingVolume: Float = 0.7f
 
     private val hangupRunnable = Runnable { hangUp() }
 
@@ -120,6 +122,7 @@ class LettemInService : Service() {
             pendingAudioFile = intent.getStringExtra(EXTRA_AUDIO_FILE)
             pendingAudioDurationMs = intent.getLongExtra(EXTRA_AUDIO_DURATION, 0L)
             pendingDtmf = intent.getStringExtra(EXTRA_DTMF) ?: "9"
+            pendingVolume = intent.getFloatExtra(EXTRA_VOLUME, 0.7f)
             Log.d("LettemIn", "ARMED behavior=$pendingBehavior audio=$pendingAudioFile " +
                 "dur=$pendingAudioDurationMs dtmf=$pendingDtmf armed=$armed")
         }
@@ -328,9 +331,12 @@ class LettemInService : Service() {
         val digit = pendingDtmf.firstOrNull() ?: '9'
 
         // Blocking CDC round-trips — off-load to a worker thread.
+        val volume = pendingVolume
+
         Thread {
             if (behavior.involvesAudio() && !file.isNullOrBlank()) {
                 if (!teensy.setActiveFile(file)) Log.w("LettemIn", "setActiveFile failed for $file")
+                if (!teensy.setVolume(volume)) Log.w("LettemIn", "setVolume failed for $volume")
             }
             if (behavior.involvesDtmf()) {
                 if (!teensy.setDtmfDigit(digit)) Log.w("LettemIn", "setDtmfDigit failed for $digit")

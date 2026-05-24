@@ -40,6 +40,7 @@ data class Profile(
     val audioFile: String?,
     val audioDurationMs: Long? = null,
     val dtmf: String = "9",
+    val volume: Float = 0.7f,           // 0.0..1.0; applied to greeting mixer gain
     val contactKeys: Set<String>
 ) {
     companion object {

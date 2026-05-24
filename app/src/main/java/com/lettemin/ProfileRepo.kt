@@ -60,6 +60,7 @@ object ProfileRepo {
         put("audioFile", p.audioFile ?: JSONObject.NULL)
         put("audioDurationMs", p.audioDurationMs ?: JSONObject.NULL)
         put("dtmf", p.dtmf)
+        put("volume", p.volume.toDouble())
         put("contactKeys", JSONArray(p.contactKeys.toList()))
     }
 
@@ -74,6 +75,7 @@ object ProfileRepo {
             audioFile = if (!j.has("audioFile") || j.isNull("audioFile")) null else j.getString("audioFile"),
             audioDurationMs = if (!j.has("audioDurationMs") || j.isNull("audioDurationMs")) null else j.getLong("audioDurationMs"),
             dtmf = if (j.has("dtmf")) j.getString("dtmf") else "9",
+            volume = if (j.has("volume")) j.getDouble("volume").toFloat().coerceIn(0f, 1f) else 0.7f,
             contactKeys = keys
         )
     }

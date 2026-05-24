@@ -18,6 +18,8 @@
 //   'F' <u16 nameLen> <nameLen bytes>                set active filename. Reply: 'f' OK / 'e' error.
 //   'D' <byte digit>                                 set active DTMF digit ('0'-'9','*','#').
 //                                                    Reply: 'd' OK / 'e' error.
+//   'V' <byte vol>                                   set greeting volume (0..255 -> 0.0..1.0).
+//                                                    Reply: 'v' OK.
 //   'W' <u16 nameLen> <nameLen bytes>
 //       <u32 size> <size bytes>                      write file to SD. Reply: 'D' OK / 'E' error.
 //   NOTE: 'D'-as-command and 'D'-as-write-ack share a byte but only the host
@@ -58,11 +60,11 @@ const uint16_t DTMF_ON_MS     = 600;
 const uint16_t DTMF_OFF_MS    = 120;
 const uint8_t  DTMF_BURSTS    = 3;
 const float    DTMF_AMP       = 0.50f;
-const float    GREET_GAIN     = 0.60f;
 
-// ---- Active file + active DTMF digit ----
-char activeFile[64] = "greeting.wav";
-char activeDigit = '9';
+// ---- Active file + active DTMF digit + greeting volume ----
+char  activeFile[64] = "greeting.wav";
+char  activeDigit    = '9';
+float greetingVolume = 0.70f;   // applied to mixer ch0 (the greeting WAV)
 
 struct DtmfFreq { uint16_t row; uint16_t col; };
 
@@ -83,6 +85,11 @@ static DtmfFreq freqsFor(char digit) {
     case '#': return { 941, 1477 };
     default:  return { 852, 1477 };  // default to '9'
   }
+}
+
+static void applyGreetingVolume() {
+  mixL.gain(0, greetingVolume);
+  mixR.gain(0, greetingVolume);
 }
 
 static void applyActiveDigit() {
@@ -187,6 +194,14 @@ void cmdSetDigit() {
   Serial.write('d');
 }
 
+void cmdSetVolume() {
+  uint8_t b[1];
+  if (!readExact(b, 1, 1000)) { Serial.write('e'); return; }
+  greetingVolume = (float)b[0] / 255.0f;
+  applyGreetingVolume();
+  Serial.write('v');
+}
+
 void cmdWriteFile() {
   uint16_t n = readU16LE();
   if (n == 0 || n >= 64) { Serial.write('E'); return; }
@@ -230,6 +245,7 @@ void handleSerial() {
       case 'P': Serial.write('p');    break;
       case 'F': cmdSetActive();       return;
       case 'D': cmdSetDigit();        return;
+      case 'V': cmdSetVolume();       return;
       case 'W': cmdWriteFile();       return;
       default: break;
     }
@@ -239,8 +255,9 @@ void handleSerial() {
 // ---- Setup / loop ----
 void setup() {
   AudioMemory(24);
-  mixL.gain(0, GREET_GAIN); mixL.gain(1, 0); mixL.gain(2, 0); mixL.gain(3, 0);
-  mixR.gain(0, GREET_GAIN); mixR.gain(1, 0); mixR.gain(2, 0); mixR.gain(3, 0);
+  mixL.gain(1, 0); mixL.gain(2, 0); mixL.gain(3, 0);
+  mixR.gain(1, 0); mixR.gain(2, 0); mixR.gain(3, 0);
+  applyGreetingVolume();
   dtmfRow.amplitude(0);
   dtmfCol.amplitude(0);
   applyActiveDigit();

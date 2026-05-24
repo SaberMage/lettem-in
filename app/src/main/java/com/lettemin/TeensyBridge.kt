@@ -93,6 +93,17 @@ class TeensyBridge(private val ctx: Context) {
         }
     }
 
+    /** Set greeting playback volume on Teensy. v in 0.0..1.0. Reply 'v' OK. */
+    @Synchronized
+    fun setVolume(v: Float, timeoutMs: Int = 1000): Boolean {
+        val p = port ?: return false
+        val byte = (v.coerceIn(0f, 1f) * 255f).toInt().coerceIn(0, 255)
+        return try {
+            p.write(byteArrayOf('V'.code.toByte(), byte.toByte()), 500)
+            waitForByte(p, 'v'.code.toByte(), timeoutMs)
+        } catch (e: IOException) { close(); false }
+    }
+
     /** Tell Teensy which DTMF digit to play. One of 0-9, *, #. Reply 'd' OK. */
     @Synchronized
     fun setDtmfDigit(digit: Char, timeoutMs: Int = 1000): Boolean {

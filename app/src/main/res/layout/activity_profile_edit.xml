@@ -54,6 +54,18 @@
             android:text="@string/pick_audio" />
 
         <TextView
+            android:id="@+id/volumeLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="8dp"
+            android:text="@string/volume_label" />
+        <SeekBar
+            android:id="@+id/volumeBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100" />
+
+        <TextView
             android:id="@+id/contactsLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

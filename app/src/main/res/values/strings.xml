@@ -22,6 +22,7 @@
     <string name="profile_name_hint">e.g. Coworkers</string>
     <string name="behavior">Behavior</string>
     <string name="dtmf_digit">DTMF digit</string>
+    <string name="volume_label">Volume: %1$d%%</string>
     <string name="pick_audio">Pick audio file</string>
     <string name="audio_file_none">Audio: none</string>
     <string name="audio_file_label">Audio: %1$s</string>

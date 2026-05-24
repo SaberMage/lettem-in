@@ -10,6 +10,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.view.View
 import android.widget.AdapterView
+import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
@@ -36,6 +37,8 @@ class ProfileEditActivity : AppCompatActivity() {
     private lateinit var behaviorSpinner: Spinner
     private lateinit var dtmfSpinner: Spinner
     private lateinit var dtmfLabel: TextView
+    private lateinit var volumeBar: SeekBar
+    private lateinit var volumeLabel: TextView
     private lateinit var audioLabel: TextView
     private lateinit var contactsLabel: TextView
 
@@ -66,6 +69,8 @@ class ProfileEditActivity : AppCompatActivity() {
         behaviorSpinner = findViewById(R.id.behaviorSpinner)
         dtmfSpinner = findViewById(R.id.dtmfSpinner)
         dtmfLabel = findViewById(R.id.dtmfLabel)
+        volumeBar = findViewById(R.id.volumeBar)
+        volumeLabel = findViewById(R.id.volumeLabel)
         audioLabel = findViewById(R.id.audioLabel)
         contactsLabel = findViewById(R.id.contactsLabel)
 
@@ -84,13 +89,23 @@ class ProfileEditActivity : AppCompatActivity() {
         nameInput.setText(profile.name)
         behaviorSpinner.setSelection(behaviors.indexOf(profile.behavior).coerceAtLeast(0))
         dtmfSpinner.setSelection(Profile.DTMF_DIGITS.indexOf(profile.dtmf).coerceAtLeast(0))
+        volumeBar.progress = (profile.volume * 100).toInt().coerceIn(0, 100)
+        renderVolume(volumeBar.progress)
         updateDtmfVisibility(profile.behavior)
+        updateVolumeVisibility(profile.behavior)
         renderAudio()
         renderContacts()
+
+        volumeBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) = renderVolume(p)
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
 
         behaviorSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
                 updateDtmfVisibility(behaviors[pos])
+                updateVolumeVisibility(behaviors[pos])
             }
             override fun onNothingSelected(p: AdapterView<*>?) {}
         }
@@ -118,6 +133,16 @@ class ProfileEditActivity : AppCompatActivity() {
         val show = b.involvesDtmf()
         dtmfLabel.visibility = if (show) View.VISIBLE else View.GONE
         dtmfSpinner.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    private fun updateVolumeVisibility(b: Behavior) {
+        val show = b.involvesAudio()
+        volumeLabel.visibility = if (show) View.VISIBLE else View.GONE
+        volumeBar.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    private fun renderVolume(pct: Int) {
+        volumeLabel.text = getString(R.string.volume_label, pct)
     }
 
     private fun renderAudio() {
@@ -198,7 +223,8 @@ class ProfileEditActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.need_audio_file, Toast.LENGTH_LONG).show(); return
         }
         val dtmf = Profile.DTMF_DIGITS[dtmfSpinner.selectedItemPosition]
-        val toSave = profile.copy(name = name, behavior = behavior, dtmf = dtmf)
+        val volume = volumeBar.progress / 100f
+        val toSave = profile.copy(name = name, behavior = behavior, dtmf = dtmf, volume = volume)
         ProfileRepo.upsert(this, toSave)
         finish()
     }

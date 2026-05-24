@@ -48,6 +48,7 @@ class LettemInScreeningService : CallScreeningService() {
                         putExtra(LettemInService.EXTRA_AUDIO_FILE, profile.audioFile)
                         putExtra(LettemInService.EXTRA_AUDIO_DURATION, profile.audioDurationMs ?: 0L)
                         putExtra(LettemInService.EXTRA_DTMF, profile.dtmf)
+                        putExtra(LettemInService.EXTRA_VOLUME, profile.volume)
                     }
                     ContextCompat.startForegroundService(this, intent)
                 }
