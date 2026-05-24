@@ -2,9 +2,7 @@ package com.lettemin
 
 import android.Manifest
 import android.app.role.RoleManager
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
@@ -34,20 +32,6 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { refresh() }
 
-    private val pickGreetingLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            try {
-                contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (_: SecurityException) {}
-            AppState.setGreetingUri(this, uri)
-        }
-        refresh()
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -57,9 +41,6 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.btnDefaultScreening).setOnClickListener {
             requestScreeningRole()
-        }
-        findViewById<Button>(R.id.btnPickGreeting).setOnClickListener {
-            pickGreetingLauncher.launch(arrayOf("audio/*"))
         }
         findViewById<Button>(R.id.btnStart).setOnClickListener {
             LettemInService.start(this)
@@ -91,24 +72,12 @@ class MainActivity : AppCompatActivity() {
             getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_CALL_SCREENING) == true
         } else true
         val running = AppState.serviceRunning
-        val enabled = AppState.isEnabled(this)
-        val greetingUri = AppState.getGreetingUri(this)
-        val greetingLabel = greetingUri?.let { displayName(it) } ?: getString(R.string.greeting_none)
+        val teensy = AppState.teensyAttached
         findViewById<TextView>(R.id.statusText).text = buildString {
             append("Perms: ${if (missing.isEmpty()) "OK" else "MISSING ${missing.size}"}\n")
             append("Screening role: ${if (screen) "OK" else "NOT SET"}\n")
-            append("Greeting: $greetingLabel\n")
-            append("Service: ${if (running) "RUNNING" else "stopped"}\n")
-            append("Auto-answer: ${if (enabled) "ENABLED" else "disabled"}")
+            append("Teensy: ${if (teensy) "LINKED (armed)" else "not detected"}\n")
+            append("Service: ${if (running) "RUNNING" else "stopped"}")
         }
-    }
-
-    private fun displayName(uri: Uri): String {
-        return try {
-            contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
-                null, null, null)?.use { c ->
-                if (c.moveToFirst()) c.getString(0) else uri.lastPathSegment ?: "set"
-            } ?: "set"
-        } catch (_: Exception) { "set" }
     }
 }

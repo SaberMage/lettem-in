@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Teensy 4.x USB Serial. VID 0x16C0 / PID 0x0483 = Serial. 0x0487 = Serial+Audio.
+         0x048A = Serial+MIDI+Audio. Matching all PJRC-issued Teensy CDC PIDs. -->
+    <usb-device vendor-id="5824" product-id="1155" />
+    <usb-device vendor-id="5824" product-id="1163" />
+    <usb-device vendor-id="5824" product-id="1166" />
+    <usb-device vendor-id="5824" product-id="1209" />
+</resources>

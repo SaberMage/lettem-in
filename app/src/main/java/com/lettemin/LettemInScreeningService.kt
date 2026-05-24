@@ -1,7 +1,6 @@
 package com.lettemin
 
 import android.Manifest
-import android.content.ContentUris
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -27,10 +26,10 @@ class LettemInScreeningService : CallScreeningService() {
         respondToCall(callDetails, response)
 
         if (!incoming || number.isNullOrBlank()) return
-        if (!AppState.isEnabled(this)) return
+        // Arm only when Teensy is attached. No Teensy = no greeting + no DTMF = pointless to answer.
+        if (!AppState.teensyAttached) return
         if (isContact(number)) return
 
-        // Tell foreground service to auto-answer when state hits RINGING.
         val intent = Intent(this, LettemInService::class.java).apply {
             action = LettemInService.ACTION_ARM_ANSWER
             putExtra(LettemInService.EXTRA_NUMBER, number)

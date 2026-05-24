@@ -5,15 +5,16 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
-import android.media.AudioAttributes
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
-import android.media.MediaPlayer
-import android.media.ToneGenerator
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -30,11 +31,11 @@ class LettemInService : Service() {
     companion object {
         const val ACTION_START = "start"
         const val ACTION_STOP = "stop"
-        const val ACTION_TOGGLE = "toggle"
         const val ACTION_ARM_ANSWER = "arm"
         const val EXTRA_NUMBER = "number"
         private const val CHANNEL_ID = "lettemin.svc"
         private const val NOTIF_ID = 1
+        private const val TEENSY_VID = 0x16C0  // PJRC
 
         fun start(ctx: Context) {
             val i = Intent(ctx, LettemInService::class.java).setAction(ACTION_START)
@@ -48,15 +49,25 @@ class LettemInService : Service() {
     private lateinit var audio: AudioManager
     private lateinit var telecom: TelecomManager
     private lateinit var telephony: TelephonyManager
+    private lateinit var usb: UsbManager
+    private lateinit var teensy: TeensyBridge
     private val main = Handler(Looper.getMainLooper())
 
-    @Volatile private var armed: Boolean = false
     @Volatile private var inProgress: Boolean = false
-    private var player: MediaPlayer? = null
-    private var tone: ToneGenerator? = null
 
     private var legacyListener: PhoneStateListener? = null
     private var modernCallback: Any? = null
+
+    private val usbReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            val device = i.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE) ?: return
+            if (device.vendorId != TEENSY_VID) return
+            when (i.action) {
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> onTeensyAttached()
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> onTeensyDetached()
+            }
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -65,33 +76,66 @@ class LettemInService : Service() {
         audio = getSystemService(AUDIO_SERVICE) as AudioManager
         telecom = getSystemService(TELECOM_SERVICE) as TelecomManager
         telephony = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+        usb = getSystemService(USB_SERVICE) as UsbManager
+        teensy = TeensyBridge(this)
         createChannel()
+        registerUsbReceiver()
         registerPhoneListener()
         AppState.serviceRunning = true
+        // Scan for already-attached Teensy
+        scanForTeensy()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_STOP -> {
-                stopSelf()
-                return START_NOT_STICKY
-            }
-            ACTION_TOGGLE -> {
-                AppState.setEnabled(this, !AppState.isEnabled(this))
-            }
-            ACTION_ARM_ANSWER -> {
-                armed = AppState.isEnabled(this)
-            }
+        if (intent?.action == ACTION_STOP) {
+            stopSelf()
+            return START_NOT_STICKY
         }
+        // ACTION_START or ACTION_ARM_ANSWER both fall through to (re)foreground.
         startForegroundWithNotif()
         return START_STICKY
     }
 
     override fun onDestroy() {
         AppState.serviceRunning = false
+        AppState.teensyAttached = false
+        try { unregisterReceiver(usbReceiver) } catch (_: Exception) {}
         unregisterPhoneListener()
         cleanupAudio()
+        teensy.close()
         super.onDestroy()
+    }
+
+    // ---------------- USB attach/detach ----------------
+
+    private fun registerUsbReceiver() {
+        val f = IntentFilter().apply {
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        }
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(usbReceiver, f, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(usbReceiver, f)
+        }
+    }
+
+    private fun scanForTeensy() {
+        val present = usb.deviceList.values.any { it.vendorId == TEENSY_VID }
+        if (present) onTeensyAttached()
+    }
+
+    private fun onTeensyAttached() {
+        AppState.teensyAttached = true
+        teensy.open()
+        refreshNotif()
+    }
+
+    private fun onTeensyDetached() {
+        AppState.teensyAttached = false
+        teensy.close()
+        refreshNotif()
     }
 
     // ---------------- Notification ----------------
@@ -113,10 +157,6 @@ class LettemInService : Service() {
     }
 
     private fun buildNotif(): android.app.Notification {
-        val enabled = AppState.isEnabled(this)
-        val toggleIntent = PendingIntent.getBroadcast(this, 1,
-            Intent(this, NotifActionReceiver::class.java).setAction(NotifActionReceiver.ACTION_TOGGLE),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val stopIntent = PendingIntent.getBroadcast(this, 2,
             Intent(this, NotifActionReceiver::class.java).setAction(NotifActionReceiver.ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -124,8 +164,10 @@ class LettemInService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-        val toggleLabel = if (enabled) getString(R.string.disable) else getString(R.string.enable)
-        val text = if (enabled) getString(R.string.notif_text_enabled) else getString(R.string.notif_text_disabled)
+        val text = if (AppState.teensyAttached)
+            getString(R.string.notif_armed)
+        else
+            getString(R.string.notif_idle)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.sym_call_incoming)
@@ -133,7 +175,6 @@ class LettemInService : Service() {
             .setContentText(text)
             .setOngoing(true)
             .setContentIntent(openIntent)
-            .addAction(0, toggleLabel, toggleIntent)
             .addAction(0, getString(R.string.stop), stopIntent)
             .build()
     }
@@ -176,22 +217,22 @@ class LettemInService : Service() {
     private fun handleState(state: Int) {
         when (state) {
             TelephonyManager.CALL_STATE_RINGING -> {
-                if (armed && !inProgress) {
+                // Arm condition: Teensy attached AND ScreeningService flagged this as non-contact
+                // (it's the one that startForegroundService'd us with ACTION_ARM_ANSWER).
+                if (AppState.teensyAttached && !inProgress) {
                     inProgress = true
                     answerCall()
                 }
             }
             TelephonyManager.CALL_STATE_OFFHOOK -> {
                 if (inProgress) {
-                    // small delay to let route stabilize
-                    main.postDelayed({ playGreetingThenDtmf() }, 400)
+                    main.postDelayed({ runGreetingSequence() }, 400)
                 }
             }
             TelephonyManager.CALL_STATE_IDLE -> {
                 if (inProgress) {
                     cleanupAudio()
                     inProgress = false
-                    armed = false
                 }
             }
         }
@@ -203,68 +244,32 @@ class LettemInService : Service() {
         try { telecom.acceptRingingCall() } catch (_: SecurityException) {}
     }
 
-    // ---------------- Audio: play greeting -> DTMF 9 ----------------
+    // ---------------- Greeting sequence ----------------
 
-    private fun playGreetingThenDtmf() {
-        try {
-            audio.mode = AudioManager.MODE_IN_COMMUNICATION
-            forceSpeakerOn()
-
-            val uri = AppState.getGreetingUri(this)
-            if (uri == null) {
-                sendDtmf9()
-                return
-            }
-            val mp = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build()
-                )
-            }
-            mp.setDataSource(this, uri)
-            mp.setOnCompletionListener {
-                main.post { sendDtmf9() }
-            }
-            mp.setOnErrorListener { _, _, _ -> sendDtmf9(); true }
-            mp.prepare()
-            mp.start()
-            player = mp
-        } catch (_: Exception) {
-            sendDtmf9()
-        }
+    private fun runGreetingSequence() {
+        audio.mode = AudioManager.MODE_IN_COMMUNICATION
+        if (!routeToUsbHeadset()) return
+        if (!teensy.isReady) teensy.open()
+        main.postDelayed({ teensy.send('G') }, 250)
     }
 
-    @Suppress("DEPRECATION")
-    private fun forceSpeakerOn() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    private fun routeToUsbHeadset(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val devices = audio.availableCommunicationDevices
-            val speaker = devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-            if (speaker != null) audio.setCommunicationDevice(speaker)
+            val usbDev = devices.firstOrNull {
+                it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
+                it.type == AudioDeviceInfo.TYPE_USB_ACCESSORY
+            } ?: return false
+            audio.setCommunicationDevice(usbDev)
         } else {
-            audio.isSpeakerphoneOn = true
+            @Suppress("DEPRECATION")
+            audio.isSpeakerphoneOn = false
+            true
         }
-    }
-
-    private fun sendDtmf9() {
-        try {
-            val tg = ToneGenerator(AudioManager.STREAM_VOICE_CALL, 100)
-            tone = tg
-            tg.startTone(ToneGenerator.TONE_DTMF_9, 350)
-            main.postDelayed({
-                try { tg.release() } catch (_: Exception) {}
-                tone = null
-            }, 500)
-        } catch (_: RuntimeException) {}
     }
 
     private fun cleanupAudio() {
-        try { player?.stop() } catch (_: Exception) {}
-        try { player?.release() } catch (_: Exception) {}
-        player = null
-        try { tone?.release() } catch (_: Exception) {}
-        tone = null
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 audio.clearCommunicationDevice()
@@ -275,6 +280,4 @@ class LettemInService : Service() {
             audio.mode = AudioManager.MODE_NORMAL
         } catch (_: Exception) {}
     }
-
-    fun onToggleChanged() = refreshNotif()
 }

@@ -26,12 +26,6 @@
         android:text="@string/set_default_screening" />
 
     <Button
-        android:id="@+id/btnPickGreeting"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/pick_greeting" />
-
-    <Button
         android:id="@+id/btnStart"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
