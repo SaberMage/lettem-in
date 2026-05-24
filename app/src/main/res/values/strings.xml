@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lettem In</string>
+    <string name="enable">Enable</string>
+    <string name="disable">Disable</string>
+    <string name="stop">Stop</string>
+    <string name="notif_title">Lettem In</string>
+    <string name="notif_text_enabled">Auto-answering non-contacts</string>
+    <string name="notif_text_disabled">Idle (disabled)</string>
+    <string name="channel_name">Lettem In service</string>
+    <string name="grant_perms">Grant permissions</string>
+    <string name="set_default_screening">Set as call screening app</string>
+    <string name="pick_greeting">Pick greeting audio</string>
+    <string name="greeting_none">none</string>
+    <string name="start_service">Start service</string>
+    <string name="stop_service">Stop service</string>
+</resources>
