@@ -11,9 +11,7 @@ class NotifActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(ctx: Context, intent: Intent) {
         if (intent.action == ACTION_STOP) {
-            ctx.startService(
-                Intent(ctx, LettemInService::class.java).setAction(LettemInService.ACTION_STOP)
-            )
+            LettemInService.stop(ctx)  // flips AppState.serviceRunning = false
         }
     }
 }

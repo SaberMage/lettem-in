@@ -40,10 +40,12 @@ class LettemInService : Service() {
         private const val TEENSY_VID = 0x16C0  // PJRC
 
         fun start(ctx: Context) {
+            AppState.serviceRunning = true  // optimistic; onDestroy clears on real exit
             val i = Intent(ctx, LettemInService::class.java).setAction(ACTION_START)
             ContextCompat.startForegroundService(ctx, i)
         }
         fun stop(ctx: Context) {
+            AppState.serviceRunning = false
             ctx.startService(Intent(ctx, LettemInService::class.java).setAction(ACTION_STOP))
         }
     }

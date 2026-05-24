@@ -5,6 +5,8 @@ import android.app.role.RoleManager
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +34,14 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { refresh() }
 
+    private val handler = Handler(Looper.getMainLooper())
+    private val poll: Runnable = object : Runnable {
+        override fun run() {
+            refresh()
+            handler.postDelayed(this, 750)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -53,7 +63,17 @@ class MainActivity : AppCompatActivity() {
         refresh()
     }
 
-    override fun onResume() { super.onResume(); refresh() }
+    override fun onResume() {
+        super.onResume()
+        refresh()
+        handler.removeCallbacks(poll)
+        handler.postDelayed(poll, 750)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        handler.removeCallbacks(poll)
+    }
 
     private fun requestScreeningRole() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
