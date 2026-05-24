@@ -41,6 +41,11 @@ data class Profile(
     val audioDurationMs: Long? = null,
     val dtmf: String = "9",
     val volume: Float = 0.7f,           // 0.0..1.0; applied to greeting mixer gain
+    val notifyOnPickup: Boolean = false,
+    val notifyOnPickupText: String = "",
+    val notifyAfterAudio: Boolean = false,
+    val notifyAfterAudioText: String = "",
+    val hangUpWhenDone: Boolean = true,
     val contactKeys: Set<String>
 ) {
     companion object {

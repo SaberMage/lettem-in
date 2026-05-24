@@ -47,6 +47,9 @@ object ProfileRepo {
         save(ctx, load(ctx).filter { it.id != id })
     }
 
+    /** Replace storage with the given list, preserving order. */
+    fun reorder(ctx: Context, ordered: List<Profile>) = save(ctx, ordered)
+
     fun newId(): String = UUID.randomUUID().toString()
 
     /** Find a profile that owns the given contact key, if any. */
@@ -61,6 +64,11 @@ object ProfileRepo {
         put("audioDurationMs", p.audioDurationMs ?: JSONObject.NULL)
         put("dtmf", p.dtmf)
         put("volume", p.volume.toDouble())
+        put("notifyOnPickup", p.notifyOnPickup)
+        put("notifyOnPickupText", p.notifyOnPickupText)
+        put("notifyAfterAudio", p.notifyAfterAudio)
+        put("notifyAfterAudioText", p.notifyAfterAudioText)
+        put("hangUpWhenDone", p.hangUpWhenDone)
         put("contactKeys", JSONArray(p.contactKeys.toList()))
     }
 
@@ -76,6 +84,11 @@ object ProfileRepo {
             audioDurationMs = if (!j.has("audioDurationMs") || j.isNull("audioDurationMs")) null else j.getLong("audioDurationMs"),
             dtmf = if (j.has("dtmf")) j.getString("dtmf") else "9",
             volume = if (j.has("volume")) j.getDouble("volume").toFloat().coerceIn(0f, 1f) else 0.7f,
+            notifyOnPickup = j.optBoolean("notifyOnPickup", false),
+            notifyOnPickupText = j.optString("notifyOnPickupText", ""),
+            notifyAfterAudio = j.optBoolean("notifyAfterAudio", false),
+            notifyAfterAudioText = j.optString("notifyAfterAudioText", ""),
+            hangUpWhenDone = j.optBoolean("hangUpWhenDone", true),
             contactKeys = keys
         )
     }

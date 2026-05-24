@@ -41,29 +41,36 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
 
-        <TextView
-            android:id="@+id/audioLabel"
+        <LinearLayout
+            android:id="@+id/audioSection"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingTop="16dp"
-            android:text="@string/audio_file_none" />
-        <Button
-            android:id="@+id/btnPickAudio"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/pick_audio" />
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/volumeLabel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingTop="8dp"
-            android:text="@string/volume_label" />
-        <SeekBar
-            android:id="@+id/volumeBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="100" />
+            <TextView
+                android:id="@+id/audioLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="16dp"
+                android:text="@string/audio_file_none" />
+            <Button
+                android:id="@+id/btnPickAudio"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/pick_audio" />
+
+            <TextView
+                android:id="@+id/volumeLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="8dp"
+                android:text="@string/volume_label" />
+            <SeekBar
+                android:id="@+id/volumeBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/contactsLabel"
@@ -76,6 +83,50 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/pick_contacts" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/actions"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:paddingTop="24dp"
+            android:paddingBottom="4dp" />
+
+        <CheckBox
+            android:id="@+id/chkNotifyPickup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/actions_notify_pickup" />
+        <EditText
+            android:id="@+id/notifyPickupText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text"
+            android:hint="@string/actions_notify_pickup_hint"
+            android:paddingStart="40dp"
+            android:paddingEnd="0dp" />
+
+        <CheckBox
+            android:id="@+id/chkNotifyAfter"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/actions_notify_after" />
+        <EditText
+            android:id="@+id/notifyAfterText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text"
+            android:hint="@string/actions_notify_after_hint"
+            android:paddingStart="40dp"
+            android:paddingEnd="0dp" />
+
+        <CheckBox
+            android:id="@+id/chkHangup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="@string/actions_hangup" />
 
         <Button
             android:id="@+id/btnSave"

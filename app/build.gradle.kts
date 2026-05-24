@@ -11,8 +11,8 @@ android {
         applicationId = "com.lettemin"
         minSdk = 26
         targetSdk = 34
-        versionCode = 13
-        versionName = "0.2.3"
+        versionCode = 14
+        versionName = "0.3.0"
     }
 
     signingConfigs {
@@ -44,6 +44,7 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("com.google.android.material:material:1.12.0")
     implementation("com.github.mik3y:usb-serial-for-android:3.7.3")
 }

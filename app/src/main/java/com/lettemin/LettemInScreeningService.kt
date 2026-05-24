@@ -21,8 +21,12 @@ class LettemInScreeningService : CallScreeningService() {
         val handle: Uri? = callDetails.handle
         val number = handle?.schemeSpecificPart
 
-        val keys = resolveKeys(number, callDetails)
-        val profile = keys.firstNotNullOfOrNull { k -> ProfileRepo.findByContactKey(this, k) }
+        // Walk profiles in list order — TOP of the list wins. First profile whose
+        // contactKeys intersects any of the buckets resolved for this call is picked.
+        val keys = resolveKeys(number, callDetails).toSet()
+        val profile = ProfileRepo.load(this).firstOrNull { p ->
+            p.contactKeys.any { it in keys }
+        }
 
         if (profile != null) {
             applyProfile(callDetails, number, profile)
@@ -49,6 +53,12 @@ class LettemInScreeningService : CallScreeningService() {
                         putExtra(LettemInService.EXTRA_AUDIO_DURATION, profile.audioDurationMs ?: 0L)
                         putExtra(LettemInService.EXTRA_DTMF, profile.dtmf)
                         putExtra(LettemInService.EXTRA_VOLUME, profile.volume)
+                        putExtra(LettemInService.EXTRA_NOTIFY_PICKUP, profile.notifyOnPickup)
+                        putExtra(LettemInService.EXTRA_NOTIFY_PICKUP_TEXT, profile.notifyOnPickupText)
+                        putExtra(LettemInService.EXTRA_NOTIFY_AFTER, profile.notifyAfterAudio)
+                        putExtra(LettemInService.EXTRA_NOTIFY_AFTER_TEXT, profile.notifyAfterAudioText)
+                        putExtra(LettemInService.EXTRA_HANGUP, profile.hangUpWhenDone)
+                        putExtra(LettemInService.EXTRA_PROFILE_NAME, profile.name)
                     }
                     ContextCompat.startForegroundService(this, intent)
                 }

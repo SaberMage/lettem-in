@@ -11,6 +11,14 @@
         android:text="@string/profiles"
         android:textSize="20sp"
         android:textStyle="bold"
+        android:paddingBottom="4dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/profiles_order_hint"
+        android:textSize="12sp"
+        android:textColor="#888888"
         android:paddingBottom="8dp" />
 
     <TextView
@@ -22,7 +30,7 @@
         android:visibility="gone"
         android:paddingBottom="8dp" />
 
-    <ListView
+    <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/list"
         android:layout_width="match_parent"
         android:layout_height="0dp"

@@ -10,6 +10,8 @@ import android.widget.Button
 import android.widget.EditText
 import android.view.View
 import android.widget.AdapterView
+import android.widget.CheckBox
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
@@ -40,7 +42,13 @@ class ProfileEditActivity : AppCompatActivity() {
     private lateinit var volumeBar: SeekBar
     private lateinit var volumeLabel: TextView
     private lateinit var audioLabel: TextView
+    private lateinit var audioSection: LinearLayout
     private lateinit var contactsLabel: TextView
+    private lateinit var chkNotifyPickup: CheckBox
+    private lateinit var notifyPickupText: EditText
+    private lateinit var chkNotifyAfter: CheckBox
+    private lateinit var notifyAfterText: EditText
+    private lateinit var chkHangup: CheckBox
 
     private var teensy: TeensyBridge? = null
 
@@ -72,7 +80,13 @@ class ProfileEditActivity : AppCompatActivity() {
         volumeBar = findViewById(R.id.volumeBar)
         volumeLabel = findViewById(R.id.volumeLabel)
         audioLabel = findViewById(R.id.audioLabel)
+        audioSection = findViewById(R.id.audioSection)
         contactsLabel = findViewById(R.id.contactsLabel)
+        chkNotifyPickup = findViewById(R.id.chkNotifyPickup)
+        notifyPickupText = findViewById(R.id.notifyPickupText)
+        chkNotifyAfter = findViewById(R.id.chkNotifyAfter)
+        notifyAfterText = findViewById(R.id.notifyAfterText)
+        chkHangup = findViewById(R.id.chkHangup)
 
         behaviorSpinner.adapter = ArrayAdapter(
             this, android.R.layout.simple_spinner_dropdown_item,
@@ -91,8 +105,14 @@ class ProfileEditActivity : AppCompatActivity() {
         dtmfSpinner.setSelection(Profile.DTMF_DIGITS.indexOf(profile.dtmf).coerceAtLeast(0))
         volumeBar.progress = (profile.volume * 100).toInt().coerceIn(0, 100)
         renderVolume(volumeBar.progress)
+        chkNotifyPickup.isChecked = profile.notifyOnPickup
+        notifyPickupText.setText(profile.notifyOnPickupText)
+        chkNotifyAfter.isChecked = profile.notifyAfterAudio
+        notifyAfterText.setText(profile.notifyAfterAudioText)
+        chkHangup.isChecked = profile.hangUpWhenDone
         updateDtmfVisibility(profile.behavior)
-        updateVolumeVisibility(profile.behavior)
+        updateAudioVisibility(profile.behavior)
+        updateAfterAudioVisibility(profile.behavior)
         renderAudio()
         renderContacts()
 
@@ -105,7 +125,8 @@ class ProfileEditActivity : AppCompatActivity() {
         behaviorSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
                 updateDtmfVisibility(behaviors[pos])
-                updateVolumeVisibility(behaviors[pos])
+                updateAudioVisibility(behaviors[pos])
+                updateAfterAudioVisibility(behaviors[pos])
             }
             override fun onNothingSelected(p: AdapterView<*>?) {}
         }
@@ -135,10 +156,15 @@ class ProfileEditActivity : AppCompatActivity() {
         dtmfSpinner.visibility = if (show) View.VISIBLE else View.GONE
     }
 
-    private fun updateVolumeVisibility(b: Behavior) {
+    private fun updateAudioVisibility(b: Behavior) {
+        audioSection.visibility = if (b.involvesAudio()) View.VISIBLE else View.GONE
+    }
+
+    private fun updateAfterAudioVisibility(b: Behavior) {
+        // Post-audio notification only makes sense if audio is played.
         val show = b.involvesAudio()
-        volumeLabel.visibility = if (show) View.VISIBLE else View.GONE
-        volumeBar.visibility = if (show) View.VISIBLE else View.GONE
+        chkNotifyAfter.visibility = if (show) View.VISIBLE else View.GONE
+        notifyAfterText.visibility = if (show) View.VISIBLE else View.GONE
     }
 
     private fun renderVolume(pct: Int) {
@@ -224,7 +250,17 @@ class ProfileEditActivity : AppCompatActivity() {
         }
         val dtmf = Profile.DTMF_DIGITS[dtmfSpinner.selectedItemPosition]
         val volume = volumeBar.progress / 100f
-        val toSave = profile.copy(name = name, behavior = behavior, dtmf = dtmf, volume = volume)
+        val toSave = profile.copy(
+            name = name,
+            behavior = behavior,
+            dtmf = dtmf,
+            volume = volume,
+            notifyOnPickup = chkNotifyPickup.isChecked,
+            notifyOnPickupText = notifyPickupText.text.toString().trim(),
+            notifyAfterAudio = chkNotifyAfter.isChecked && behavior.involvesAudio(),
+            notifyAfterAudioText = notifyAfterText.text.toString().trim(),
+            hangUpWhenDone = chkHangup.isChecked
+        )
         ProfileRepo.upsert(this, toSave)
         finish()
     }

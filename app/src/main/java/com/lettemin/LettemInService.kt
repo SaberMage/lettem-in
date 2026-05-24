@@ -40,8 +40,17 @@ class LettemInService : Service() {
         const val EXTRA_AUDIO_DURATION = "audio_duration_ms"  // Long, 0 if unknown
         const val EXTRA_DTMF = "dtmf"              // String, e.g. "9" or "*"
         const val EXTRA_VOLUME = "volume"          // Float 0..1
+        const val EXTRA_NOTIFY_PICKUP = "notify_pickup"
+        const val EXTRA_NOTIFY_PICKUP_TEXT = "notify_pickup_text"
+        const val EXTRA_NOTIFY_AFTER = "notify_after"
+        const val EXTRA_NOTIFY_AFTER_TEXT = "notify_after_text"
+        const val EXTRA_HANGUP = "hangup"
+        const val EXTRA_PROFILE_NAME = "profile_name"
         private const val CHANNEL_ID = "lettemin.svc"
+        private const val CHANNEL_ACTION_ID = "lettemin.action"
         private const val NOTIF_ID = 1
+        private const val NOTIF_PICKUP_ID = 100
+        private const val NOTIF_AFTER_ID = 101
         private const val TEENSY_VID = 0x16C0  // PJRC
 
         fun start(ctx: Context) {
@@ -71,8 +80,15 @@ class LettemInService : Service() {
     @Volatile private var pendingAudioDurationMs: Long = 0L
     @Volatile private var pendingDtmf: String = "9"
     @Volatile private var pendingVolume: Float = 0.7f
+    @Volatile private var pendingNotifyPickup: Boolean = false
+    @Volatile private var pendingNotifyPickupText: String = ""
+    @Volatile private var pendingNotifyAfter: Boolean = false
+    @Volatile private var pendingNotifyAfterText: String = ""
+    @Volatile private var pendingHangup: Boolean = true
+    @Volatile private var pendingProfileName: String = ""
 
     private val hangupRunnable = Runnable { hangUp() }
+    private val afterAudioNotifRunnable = Runnable { postAfterAudioNotif() }
 
     /** Approx total wall-clock time the Teensy needs to finish the play sequence.
      *  Keep in sync with constants in teensy/lettem_in/lettem_in.ino. */
@@ -123,6 +139,12 @@ class LettemInService : Service() {
             pendingAudioDurationMs = intent.getLongExtra(EXTRA_AUDIO_DURATION, 0L)
             pendingDtmf = intent.getStringExtra(EXTRA_DTMF) ?: "9"
             pendingVolume = intent.getFloatExtra(EXTRA_VOLUME, 0.7f)
+            pendingNotifyPickup = intent.getBooleanExtra(EXTRA_NOTIFY_PICKUP, false)
+            pendingNotifyPickupText = intent.getStringExtra(EXTRA_NOTIFY_PICKUP_TEXT) ?: ""
+            pendingNotifyAfter = intent.getBooleanExtra(EXTRA_NOTIFY_AFTER, false)
+            pendingNotifyAfterText = intent.getStringExtra(EXTRA_NOTIFY_AFTER_TEXT) ?: ""
+            pendingHangup = intent.getBooleanExtra(EXTRA_HANGUP, true)
+            pendingProfileName = intent.getStringExtra(EXTRA_PROFILE_NAME) ?: ""
             Log.d("LettemIn", "ARMED behavior=$pendingBehavior audio=$pendingAudioFile " +
                 "dur=$pendingAudioDurationMs dtmf=$pendingDtmf armed=$armed")
         }
@@ -188,9 +210,45 @@ class LettemInService : Service() {
 
     private fun createChannel() {
         val nm = getSystemService(NotificationManager::class.java)
-        val ch = NotificationChannel(CHANNEL_ID, getString(R.string.channel_name),
+        // Low-importance channel for the persistent service notif.
+        val svcCh = NotificationChannel(CHANNEL_ID, getString(R.string.channel_name),
             NotificationManager.IMPORTANCE_LOW)
-        nm.createNotificationChannel(ch)
+        nm.createNotificationChannel(svcCh)
+        // High-importance channel for per-call action notifs (heads-up).
+        val actCh = NotificationChannel(CHANNEL_ACTION_ID, getString(R.string.channel_action_name),
+            NotificationManager.IMPORTANCE_HIGH)
+        nm.createNotificationChannel(actCh)
+    }
+
+    private fun postActionNotif(id: Int, title: String, text: String) {
+        val openIntent = PendingIntent.getActivity(this, 0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val n = NotificationCompat.Builder(this, CHANNEL_ACTION_ID)
+            .setSmallIcon(android.R.drawable.sym_call_incoming)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setAutoCancel(true)
+            .setContentIntent(openIntent)
+            .build()
+        getSystemService(NotificationManager::class.java).notify(id, n)
+    }
+
+    private fun postPickupNotif() {
+        if (!pendingNotifyPickup) return
+        val text = pendingNotifyPickupText.ifBlank { getString(R.string.notif_pickup_default) }
+        val title = pendingProfileName.ifBlank { getString(R.string.notif_title) }
+        postActionNotif(NOTIF_PICKUP_ID, title, text)
+    }
+
+    private fun postAfterAudioNotif() {
+        if (!pendingNotifyAfter) return
+        val text = pendingNotifyAfterText.ifBlank { getString(R.string.notif_after_default) }
+        val title = pendingProfileName.ifBlank { getString(R.string.notif_title) }
+        postActionNotif(NOTIF_AFTER_ID, title, text)
     }
 
     private fun startForegroundWithNotif() {
@@ -284,19 +342,28 @@ class LettemInService : Service() {
             }
             TelephonyManager.CALL_STATE_OFFHOOK -> {
                 if (inProgress) {
+                    postPickupNotif()
                     main.postDelayed({ runGreetingSequence() }, 400)
-                    // Auto hang-up after the play sequence finishes (dynamic).
+                    main.removeCallbacks(afterAudioNotifRunnable)
+                    if (pendingNotifyAfter && pendingBehavior.involvesAudio()
+                        && pendingAudioDurationMs > 0) {
+                        // Schedule from now ≈ when play actually starts (400ms warmup + 250ms cmd dispatch).
+                        main.postDelayed(afterAudioNotifRunnable, 650L + pendingAudioDurationMs)
+                    }
                     main.removeCallbacks(hangupRunnable)
-                    main.postDelayed(hangupRunnable, computeHangupDelayMs())
+                    if (pendingHangup) {
+                        main.postDelayed(hangupRunnable, computeHangupDelayMs())
+                    }
                 }
             }
             TelephonyManager.CALL_STATE_IDLE -> {
                 main.removeCallbacks(hangupRunnable)
+                main.removeCallbacks(afterAudioNotifRunnable)
                 if (inProgress) {
                     cleanupAudio()
                     inProgress = false
                 }
-                armed = false  // disarm regardless of inProgress
+                armed = false
             }
         }
     }

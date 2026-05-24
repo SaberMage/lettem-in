@@ -16,6 +16,8 @@
     <string name="profiles">Profiles</string>
     <string name="new_profile">New profile</string>
     <string name="no_profiles">No profiles yet. Tap New profile to create one.</string>
+    <string name="profiles_order_hint">Drag the handle on the left to reorder — topmost profile wins when a call matches more than one.</string>
+    <string name="drag_handle">Drag</string>
 
     <!-- Profile edit -->
     <string name="profile_name">Profile name</string>
@@ -23,6 +25,17 @@
     <string name="behavior">Behavior</string>
     <string name="dtmf_digit">DTMF digit</string>
     <string name="volume_label">Volume: %1$d%%</string>
+    <string name="channel_action_name">Call actions</string>
+
+    <!-- Actions section -->
+    <string name="actions">Actions</string>
+    <string name="actions_notify_pickup">Push notification on pickup</string>
+    <string name="actions_notify_pickup_hint">Custom text (optional)</string>
+    <string name="actions_notify_after">Push notification after audio plays</string>
+    <string name="actions_notify_after_hint">Custom text (optional)</string>
+    <string name="actions_hangup">Hang up when done</string>
+    <string name="notif_pickup_default">Call answered.</string>
+    <string name="notif_after_default">Audio finished.</string>
     <string name="pick_audio">Pick audio file</string>
     <string name="audio_file_none">Audio: none</string>
     <string name="audio_file_label">Audio: %1$s</string>
