@@ -58,6 +58,14 @@ class LettemInService : Service() {
     private val main = Handler(Looper.getMainLooper())
 
     @Volatile private var inProgress: Boolean = false
+    // Set by ScreeningService via ACTION_ARM_ANSWER for non-contact calls only.
+    // Cleared on IDLE. Without this, we'd answer every ringing call once Teensy is attached,
+    // including known contacts.
+    @Volatile private var armed: Boolean = false
+
+    // Auto hang-up window. Counted from the moment we accept the call.
+    private val MAX_CALL_DURATION_MS = 15_000L
+    private val hangupRunnable = Runnable { hangUp() }
 
     private var legacyListener: PhoneStateListener? = null
     private var modernCallback: Any? = null
@@ -94,10 +102,12 @@ class LettemInService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_ARM_ANSWER) {
+            armed = AppState.teensyAttached
+            Log.d("LettemIn", "ARMED for non-contact incoming call (armed=$armed)")
+        }
         try {
-            // ARM_ANSWER means a real call is incoming → may legitimately use phoneCall type.
-            val asCall = intent?.action == ACTION_ARM_ANSWER
-            startForegroundWithNotif(asCall)
+            startForegroundWithNotif()
         } catch (e: Throwable) {
             Log.e("LettemIn", "startForeground failed", e)
             Toast.makeText(
@@ -150,7 +160,8 @@ class LettemInService : Service() {
     private fun onTeensyDetached() {
         AppState.teensyAttached = false
         teensy.close()
-        refreshNotif()
+        // Service is pointless without Teensy — bail out cleanly. User can replug to relaunch.
+        stopSelf()
     }
 
     // ---------------- Notification ----------------
@@ -162,17 +173,14 @@ class LettemInService : Service() {
         nm.createNotificationChannel(ch)
     }
 
-    private fun startForegroundWithNotif(asCall: Boolean = false) {
+    private fun startForegroundWithNotif() {
         val n = buildNotif()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // Android 14+: phoneCall FGS type is only allowed when actually screening/handling
-            // a call. Use specialUse for the always-on idle listener; promote to phoneCall
-            // only when ARM_ANSWER fires for a real incoming call.
-            val type = if (asCall)
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
-            else
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            startForeground(NOTIF_ID, n, type)
+            // Android 14+: FGS type=phoneCall is ONLY granted to ROLE_DIALER apps or
+            // services bound by Telecom as InCallService. ROLE_CALL_SCREENING is NOT
+            // sufficient — promotion throws ForegroundServiceTypeNotAllowedException and
+            // the system kills the service. Stay on specialUse for the whole lifecycle.
+            startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(NOTIF_ID, n)
         }
@@ -248,9 +256,8 @@ class LettemInService : Service() {
     private fun handleState(state: Int) {
         when (state) {
             TelephonyManager.CALL_STATE_RINGING -> {
-                // Arm condition: Teensy attached AND ScreeningService flagged this as non-contact
-                // (it's the one that startForegroundService'd us with ACTION_ARM_ANSWER).
-                if (AppState.teensyAttached && !inProgress) {
+                // Two gates: ScreeningService must have armed (non-contact) AND Teensy attached.
+                if (armed && AppState.teensyAttached && !inProgress) {
                     inProgress = true
                     answerCall()
                 }
@@ -258,13 +265,18 @@ class LettemInService : Service() {
             TelephonyManager.CALL_STATE_OFFHOOK -> {
                 if (inProgress) {
                     main.postDelayed({ runGreetingSequence() }, 400)
+                    // Safety net: end the call no matter what, after the cap.
+                    main.removeCallbacks(hangupRunnable)
+                    main.postDelayed(hangupRunnable, MAX_CALL_DURATION_MS)
                 }
             }
             TelephonyManager.CALL_STATE_IDLE -> {
+                main.removeCallbacks(hangupRunnable)
                 if (inProgress) {
                     cleanupAudio()
                     inProgress = false
                 }
+                armed = false  // disarm regardless of inProgress
             }
         }
     }
@@ -273,6 +285,18 @@ class LettemInService : Service() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS)
             != PackageManager.PERMISSION_GRANTED) return
         try { telecom.acceptRingingCall() } catch (_: SecurityException) {}
+    }
+
+    private fun hangUp() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS)
+            != PackageManager.PERMISSION_GRANTED) return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                telecom.endCall()
+            }
+        } catch (e: SecurityException) {
+            Log.w("LettemIn", "endCall denied", e)
+        }
     }
 
     // ---------------- Greeting sequence ----------------

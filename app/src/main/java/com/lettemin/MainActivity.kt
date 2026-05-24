@@ -2,7 +2,9 @@ package com.lettemin
 
 import android.Manifest
 import android.app.role.RoleManager
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -21,6 +23,7 @@ class MainActivity : AppCompatActivity() {
         add(Manifest.permission.ANSWER_PHONE_CALLS)
         add(Manifest.permission.READ_CONTACTS)
         add(Manifest.permission.MODIFY_AUDIO_SETTINGS)
+        add(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -45,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        maybeAutoStartFromUsb(intent)
 
         findViewById<Button>(R.id.btnGrant).setOnClickListener {
             permLauncher.launch(perms)
@@ -61,6 +65,18 @@ class MainActivity : AppCompatActivity() {
             refresh()
         }
         refresh()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        maybeAutoStartFromUsb(intent)
+    }
+
+    private fun maybeAutoStartFromUsb(intent: Intent?) {
+        if (intent?.action != UsbManager.ACTION_USB_DEVICE_ATTACHED) return
+        // Launched because Teensy was plugged in. Boot the listener service.
+        if (!AppState.serviceRunning) LettemInService.start(this)
     }
 
     override fun onResume() {

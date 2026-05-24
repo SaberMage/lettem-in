@@ -1,9 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Teensy 4.x USB Serial. VID 0x16C0 / PID 0x0483 = Serial. 0x0487 = Serial+Audio.
-         0x048A = Serial+MIDI+Audio. Matching all PJRC-issued Teensy CDC PIDs. -->
-    <usb-device vendor-id="5824" product-id="1155" />
-    <usb-device vendor-id="5824" product-id="1163" />
-    <usb-device vendor-id="5824" product-id="1166" />
-    <usb-device vendor-id="5824" product-id="1209" />
+    <!-- PJRC Teensy USB PIDs (VID 0x16C0 = 5824).
+         See https://www.pjrc.com/teensy/usb_desc.h.
+         Android USB filters require exact PID match (no wildcards) — enumerate
+         every variant the user might flash. Our build is 0x048A. -->
+    <usb-device vendor-id="5824" product-id="1155" /> <!-- 0x0483 Serial -->
+    <usb-device vendor-id="5824" product-id="1156" /> <!-- 0x0484 HID -->
+    <usb-device vendor-id="5824" product-id="1157" /> <!-- 0x0485 Audio -->
+    <usb-device vendor-id="5824" product-id="1158" /> <!-- 0x0486 MIDI -->
+    <usb-device vendor-id="5824" product-id="1159" /> <!-- 0x0487 Serial+HID -->
+    <usb-device vendor-id="5824" product-id="1160" /> <!-- 0x0488 Serial+MIDI -->
+    <usb-device vendor-id="5824" product-id="1161" /> <!-- 0x0489 Serial+Audio -->
+    <usb-device vendor-id="5824" product-id="1162" /> <!-- 0x048A Serial+MIDI+Audio (our build) -->
+    <usb-device vendor-id="5824" product-id="1163" /> <!-- 0x048B MIDIx4 -->
+    <usb-device vendor-id="5824" product-id="1164" /> <!-- 0x048C MIDIx16 -->
+    <usb-device vendor-id="5824" product-id="1165" /> <!-- 0x048D Serial+MIDIx4 -->
+    <usb-device vendor-id="5824" product-id="1166" /> <!-- 0x048E Serial+MIDIx16 -->
+    <usb-device vendor-id="5824" product-id="1209" /> <!-- 0x04B9 RawHID -->
 </resources>

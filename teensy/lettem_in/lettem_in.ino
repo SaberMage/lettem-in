@@ -40,14 +40,18 @@ AudioConnection patchOutL  (mixL, 0, usbOut, 0);
 AudioConnection patchOutR  (mixR, 0, usbOut, 1);
 
 // ---- State machine ----
-enum State { IDLE, PLAYING_GREETING, GAP, DTMF, DONE };
+enum State { IDLE, PLAYING_GREETING, GAP, DTMF_ON, DTMF_OFF, DONE };
 State state = IDLE;
 elapsedMillis stateClock;
+uint8_t dtmfBurst = 0;
 
-const uint16_t GAP_MS  = 200;
-const uint16_t DTMF_MS = 350;
-const float    DTMF_AMP = 0.40f;  // each tone; sum stays under clip
-const float    GREET_GAIN = 1.0f;
+const uint16_t GAP_MS         = 400;   // greeting tail drain
+const uint16_t DTMF_ON_MS     = 600;   // one burst length
+const uint16_t DTMF_OFF_MS    = 120;   // silence between bursts
+const uint8_t  DTMF_BURSTS    = 3;     // repeat so carrier decoder has multiple shots
+const float    DTMF_AMP       = 0.50f; // each tone; 0.5+0.5 = 1.0 sum, max before clip
+const float    GREET_GAIN     = 0.60f; // ducked so phone-side AGC doesn't compress and
+                                       // suppress the louder DTMF burst that follows
 
 void setup() {
   AudioMemory(24);
@@ -77,21 +81,30 @@ void startGreeting() {
   stateClock = 0;
 }
 
-void startDtmf() {
+void dtmfOn() {
   mixL.gain(1, 1.0f); mixL.gain(2, 1.0f);
   mixR.gain(1, 1.0f); mixR.gain(2, 1.0f);
   dtmfRow.amplitude(DTMF_AMP);
   dtmfCol.amplitude(DTMF_AMP);
-  state = DTMF;
+}
+
+void dtmfOff() {
+  dtmfRow.amplitude(0);
+  dtmfCol.amplitude(0);
+  mixL.gain(1, 0); mixL.gain(2, 0);
+  mixR.gain(1, 0); mixR.gain(2, 0);
+}
+
+void startDtmf() {
+  dtmfBurst = 0;
+  dtmfOn();
+  state = DTMF_ON;
   stateClock = 0;
 }
 
 void stopAll() {
   greeting.stop();
-  dtmfRow.amplitude(0);
-  dtmfCol.amplitude(0);
-  mixL.gain(1, 0); mixL.gain(2, 0);
-  mixR.gain(1, 0); mixR.gain(2, 0);
+  dtmfOff();
   state = IDLE;
 }
 
@@ -120,13 +133,23 @@ void loop() {
     case GAP:
       if (stateClock >= GAP_MS) startDtmf();
       break;
-    case DTMF:
-      if (stateClock >= DTMF_MS) {
-        dtmfRow.amplitude(0);
-        dtmfCol.amplitude(0);
-        mixL.gain(1, 0); mixL.gain(2, 0);
-        mixR.gain(1, 0); mixR.gain(2, 0);
-        state = DONE;
+    case DTMF_ON:
+      if (stateClock >= DTMF_ON_MS) {
+        dtmfOff();
+        dtmfBurst++;
+        if (dtmfBurst >= DTMF_BURSTS) {
+          state = DONE;
+        } else {
+          state = DTMF_OFF;
+          stateClock = 0;
+        }
+      }
+      break;
+    case DTMF_OFF:
+      if (stateClock >= DTMF_OFF_MS) {
+        dtmfOn();
+        state = DTMF_ON;
+        stateClock = 0;
       }
       break;
     case DONE:

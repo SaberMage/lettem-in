@@ -11,8 +11,8 @@ android {
         applicationId = "com.lettemin"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.1.3"
+        versionCode = 9
+        versionName = "0.1.8"
     }
 
     signingConfigs {
