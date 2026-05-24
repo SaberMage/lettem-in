@@ -19,6 +19,8 @@
 - Funny sound bites when friends or family call
 - Also mine: reject spam callers *(doesn't need the Teensy + never rings!)*
 
+For easy installation and keeping up with the latest version, I highly recommend [Obtainium](https://github.com/ImranR98/Obtainium).
+
 -----
 
 <p align="center">
