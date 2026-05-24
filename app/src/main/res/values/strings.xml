@@ -42,4 +42,5 @@
     <string name="search_contacts">Search</string>
     <string name="anonymous_caller">(Anonymous / withheld number)</string>
     <string name="likely_spam">(Likely spam — STIR/SHAKEN failed)</string>
+    <string name="not_in_contacts">(Any number not in contacts)</string>
 </resources>

@@ -29,13 +29,9 @@ class LettemInScreeningService : CallScreeningService() {
             applyProfile(callDetails, number, profile)
             return
         }
-
-        // No profile matched. Default: only auto-greet if non-contact AND Teensy attached.
-        // Real contacts not in any profile ring through normally.
+        // No profile matched any of {SPAM, contactKey, NOT_IN_CONTACTS, ANONYMOUS}.
+        // Just let the call ring through normally.
         respondToCall(callDetails, allowResponse())
-        if (!number.isNullOrBlank() && !isContact(number) && AppState.teensyAttached) {
-            armForCall(number, Behavior.AUDIO_AND_DTMF, audioFile = null)
-        }
     }
 
     private fun applyProfile(callDetails: Call.Details, number: String?, profile: Profile) {
@@ -77,18 +73,25 @@ class LettemInScreeningService : CallScreeningService() {
         .setSkipNotification(false)
         .build()
 
+    /**
+     * Buckets the caller falls into. Order matters — first match wins.
+     * Priority:
+     *   SPAM  (STIR/SHAKEN failed)  →  real contact key  →  NOT_IN_CONTACTS  →  ANONYMOUS
+     * Anonymous callers (no number) intentionally skip NOT_IN_CONTACTS.
+     */
     private fun resolveKeys(number: String?, details: Call.Details): List<String> {
         val out = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val status = details.callerNumberVerificationStatus
-            if (status == Connection.VERIFICATION_STATUS_FAILED) {
+            if (details.callerNumberVerificationStatus == Connection.VERIFICATION_STATUS_FAILED) {
                 out += Profile.KEY_SPAM
             }
         }
         if (number.isNullOrBlank()) {
             out += Profile.KEY_ANONYMOUS
         } else {
-            contactLookupKey(number)?.let { out += it }
+            val key = contactLookupKey(number)
+            if (key != null) out += key
+            else out += Profile.KEY_NOT_IN_CONTACTS
         }
         return out
     }
@@ -108,5 +111,4 @@ class LettemInScreeningService : CallScreeningService() {
         return null
     }
 
-    private fun isContact(number: String): Boolean = contactLookupKey(number) != null
 }

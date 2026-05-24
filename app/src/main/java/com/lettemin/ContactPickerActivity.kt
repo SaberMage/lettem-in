@@ -75,6 +75,7 @@ class ContactPickerActivity : AppCompatActivity() {
     }
 
     private fun loadAll() {
+        rows.add(Row(Profile.KEY_NOT_IN_CONTACTS, getString(R.string.not_in_contacts)))
         rows.add(Row(Profile.KEY_ANONYMOUS, getString(R.string.anonymous_caller)))
         rows.add(Row(Profile.KEY_SPAM, getString(R.string.likely_spam)))
 

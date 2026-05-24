@@ -33,5 +33,6 @@ data class Profile(
     companion object {
         const val KEY_ANONYMOUS = "ANONYMOUS"
         const val KEY_SPAM = "SPAM"
+        const val KEY_NOT_IN_CONTACTS = "NOT_IN_CONTACTS"  // any number not saved as a contact
     }
 }
